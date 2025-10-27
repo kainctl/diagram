@@ -27,6 +27,7 @@ local List   = require 'pandoc.List'
 local stringify = utils.stringify
 local with_temporary_directory = system.with_temporary_directory
 local with_working_directory = system.with_working_directory
+local inspect = require 'inspect'
 
 --- Returns a filter-specific directory in which cache files can be
 --- stored, or nil if no such directory is available.
@@ -305,6 +306,8 @@ local d2 = {
         local infile = 'diagram.d2'
         local outfile = 'diagram.' .. file_extension
 
+        print(inspect(user_opts))
+
         args = {'--bundle', '--pad=0', '--scale=1'}
 
         d2_user_opts = {
@@ -315,6 +318,16 @@ local d2 = {
             table.insert(args, '--' .. d2_user_opt .. '=' .. user_opts[d2_user_opt])
           end
         end
+
+        for key, value in pairs(user_opts) do
+          table.insert(args, string.format("%s=%s", key, value))
+        end
+
+        -- table.insert(args, ";")
+        -- table.insert(args, "touch")
+        -- table.insert(args, "/tmp/fail")
+
+        print(inspect(args))
 
         table.insert(args, infile)
         table.insert(args, outfile)
@@ -493,6 +506,7 @@ local function diagram_options (cb, comment_start)
   local user_opt = {}
 
   for attr_name, value in pairs(attribs) do
+    print(attr_name)
     if attr_name == 'alt' then
       alt = value
     elseif attr_name == 'caption' then
@@ -516,8 +530,15 @@ local function diagram_options (cb, comment_start)
       elseif prefix == 'opt' then
         user_opt[key] = value
       else
-        -- Use as image attribute
-        image_attr[attr_name] = value
+        print(attr_name)
+        local args_val = attr_name:match '^args%[(.*)%]'
+        if args_val then
+          print("args found")
+          user_opt['args'] = args_val
+        else
+          -- Use as image attribute
+          image_attr[attr_name] = value
+        end
       end
     end
   end
