@@ -297,7 +297,7 @@ local d2 = {
   line_comment_start = '#',
   mime_types = mime_types_set{'png', 'svg'},
 
-  compile = function (self, code, user_opts)
+  compile = function (self, code, user_opts, user_args)
     return with_temporary_directory('diagram', function (tmpdir)
       return with_working_directory(tmpdir, function ()
         -- D2 format identifiers correspond to common file extensions.
@@ -306,26 +306,20 @@ local d2 = {
         local infile = 'diagram.d2'
         local outfile = 'diagram.' .. file_extension
 
+        print("self:")
+        print(inspect(self))
+        print("user_opts:")
         print(inspect(user_opts))
+        print("user_args")
+        print(inspect(user_args))
 
-        args = {'--bundle', '--pad=0', '--scale=1'}
+        -- These default args should be documented and ignored
+        -- if no user_options are given.
+        local args = {'--bundle', '--pad=0', '--scale=1'}
 
-        d2_user_opts = {
-          'layout',
-        }
-        for _, d2_user_opt in pairs(d2_user_opts) do
-          if user_opts[d2_user_opt] then
-            table.insert(args, '--' .. d2_user_opt .. '=' .. user_opts[d2_user_opt])
-          end
-        end
-
-        for key, value in pairs(user_opts) do
-          table.insert(args, string.format("%s=%s", key, value))
-        end
-
-        -- table.insert(args, ";")
-        -- table.insert(args, "touch")
-        -- table.insert(args, "/tmp/fail")
+        -- for key, value in pairs(user_opts) do
+        --   table.insert(args, string.format("%s=%s", key, value))
+        -- end
 
         print(inspect(args))
 
@@ -504,9 +498,11 @@ local function diagram_options (cb, comment_start)
   local filename
   local image_attr = {}
   local user_opt = {}
+  local user_args = {}
 
+  print("attribs")
+  print(inspect(attribs))
   for attr_name, value in pairs(attribs) do
-    print(attr_name)
     if attr_name == 'alt' then
       alt = value
     elseif attr_name == 'caption' then
@@ -530,11 +526,12 @@ local function diagram_options (cb, comment_start)
       elseif prefix == 'opt' then
         user_opt[key] = value
       else
-        print(attr_name)
-        local args_val = attr_name:match '^args%[(.*)%]'
-        if args_val then
-          print("args found")
-          user_opt['args'] = args_val
+        -- TODO: Check if the option is enabled.
+        local args_key, args_val = attr_name:match '^args-(.*)=(.*)'
+        if args_key then
+          print("arg found " .. args_key .. "=" .. args_val)
+          -- TODO: Consider making the value `nil` if it is empty!
+          user_args[args_key] = args_val
         else
           -- Use as image attribute
           image_attr[attr_name] = value
@@ -552,6 +549,7 @@ local function diagram_options (cb, comment_start)
     ['filename'] = filename,
     ['image-attr'] = image_attr,
     ['opt'] = user_opt,
+    ['args'] = user_args,
   }
 end
 
@@ -600,6 +598,13 @@ local function code_to_figure (conf)
       dgr_opt.opt[optname] = dgr_opt.opt[optname] or value
     end
 
+    for argname, value in pairs(engine.args or {}) do
+      -- HERE: consider combining user defaults and checking if
+      -- it is even allowed.
+      print("argname " .. argname)
+      dgr_opt.args[argname] = dgr_opt.args[argname] or value
+    end
+
     local run_pdf2svg = engine.mime_type == 'application/pdf'
       and conf.format.pdf2svg
 
@@ -616,7 +621,7 @@ local function code_to_figure (conf)
       -- No cached image; call the converter
       local success
       success, imgdata, imgtype =
-        pcall(engine.compile, engine, block.text, dgr_opt.opt)
+        pcall(engine.compile, engine, block.text, dgr_opt.opt, dgr_opt.args)
 
       -- Bail if an error occurred; imgdata contains the error message
       -- when that happens.
