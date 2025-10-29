@@ -28,10 +28,14 @@ local stringify = utils.stringify
 local with_temporary_directory = system.with_temporary_directory
 local with_working_directory = system.with_working_directory
 local inspect = require 'inspect'
+local dbg = require 'debugger'
+
+dbg.auto_where = 5
 
 --- Returns a filter-specific directory in which cache files can be
 --- stored, or nil if no such directory is available.
 local function cachedir ()
+  print "cachedir"
   local cache_home = os.getenv 'XDG_CACHE_HOME'
   if not cache_home or cache_home == '' then
     local user_home = system.os == 'windows'
@@ -298,6 +302,7 @@ local d2 = {
   mime_types = mime_types_set{'png', 'svg'},
 
   compile = function (self, code, user_opts, user_args)
+    print 'in compile'
     return with_temporary_directory('diagram', function (tmpdir)
       return with_working_directory(tmpdir, function ()
         -- D2 format identifiers correspond to common file extensions.
@@ -500,8 +505,6 @@ local function diagram_options (cb, comment_start)
   local user_opt = {}
   local user_args = {}
 
-  print("attribs")
-  print(inspect(attribs))
   for attr_name, value in pairs(attribs) do
     if attr_name == 'alt' then
       alt = value
@@ -539,6 +542,8 @@ local function diagram_options (cb, comment_start)
       end
     end
   end
+
+  dbg()
 
   return {
     ['alt'] = alt or
@@ -658,6 +663,7 @@ local function code_to_figure (conf)
 
     -- Create the image object.
     local image = pandoc.Image(dgr_opt.alt, fname, "", dgr_opt['image-attr'])
+
 
     -- Create a figure if the diagram has a caption; otherwise return
     -- just the image.

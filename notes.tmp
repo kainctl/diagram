@@ -1,0 +1,21 @@
+Call chain is
+
+- `configure`
+	- Read metadata and such
+- `format_options`
+	-> Decide how the output should be structured depending on the input
+- `get_engine`
+	-> Configures all enabled engines:
+		- Sets execpath
+		- Sets mime type
+		- Returns `engine` table with _global_ `engopts`
+- `code_to_figure`
+	- checks if a `diagram` class is defined
+	- checks if it maps to an existing diagram
+- `diagram_options`
+	- calls `properties_from_code` if `comment_start` is defined
+		- matched `<escaped_comment>|<space><KEY>:<space><VALUE>EOL`
+	- results are stored in `attribs`
+	  where the value could be empty but requires the key to end with `: ` (<- Space!)
+	- the pandoc code block `cb` also includes the pandoc specific attributes.
+
