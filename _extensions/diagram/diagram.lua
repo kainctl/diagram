@@ -301,8 +301,10 @@ local d2 = {
   line_comment_start = '#',
   mime_types = mime_types_set{'png', 'svg'},
 
+  -- user_opts is a poor variable name.
+  -- It contains _all_ unified properties, such as the
+  -- compile function itself and mime data.
   compile = function (self, code, user_opts, user_args)
-    print 'in compile'
     return with_temporary_directory('diagram', function (tmpdir)
       return with_working_directory(tmpdir, function ()
         -- D2 format identifiers correspond to common file extensions.
@@ -311,29 +313,45 @@ local d2 = {
         local infile = 'diagram.d2'
         local outfile = 'diagram.' .. file_extension
 
-        print("self:")
-        print(inspect(self))
-        print("user_opts:")
-        print(inspect(user_opts))
-        print("user_args")
-        print(inspect(user_args))
+        -- TODO: Maybe they should be skipped if _any_
+        -- special user args are given?
+        local args = {
+          ["--bundle"] = "", ["--pad"] = 0, ["--scale"] = 1
+        }
 
-        -- These default args should be documented and ignored
-        -- if no user_options are given.
-        local args = {'--bundle', '--pad=0', '--scale=1'}
+        -- TODO: Discuss if this style makes sense
+        for key, val in pairs(user_args) do
+          args[key] = val
+        end
 
-        -- for key, value in pairs(user_opts) do
-        --   table.insert(args, string.format("%s=%s", key, value))
-        -- end
+        local rendered_args = {}
+        for key, val in pairs(args) do
+          -- Allow rendering _empty_ attribute AND
+          -- flags, while still ensuring that common key values
+          -- can be overwritten by later values.
+          if type(val) == "table" and next(val) == nil then
+            table.insert(rendered_args, ("%s"):format(key))
+          elseif val == "" then
+            table.insert(rendered_args, ("%s="):format(key))
+          else
+            table.insert(rendered_args, ("%s=%s"):format(key, val))
+          end
+        end
 
-        print(inspect(args))
-
-        table.insert(args, infile)
-        table.insert(args, outfile)
+        -- TODO: Should end with `--` to improve security.
+        table.insert(rendered_args, infile)
+        table.insert(rendered_args, outfile)
 
         write_file(infile, code)
 
-        pipe(self.execpath or 'd2', args, '')
+        print(inspect(rendered_args))
+
+        -- TODO: What should happen if execpath contains any custom
+        -- options? I personally would argue that `execpath` should
+        -- simply not allow passing "global" options at all.
+        -- Rather, a custom `args` keyword should be used.
+        -- But this may break user code.
+        pipe(self.execpath or 'd2', rendered_args, '')
 
         return read_file(outfile), mime_type
       end)
@@ -477,8 +495,8 @@ end
 
 local function properties_from_code (code, comment_start)
   local props = {}
-  local pattern = comment_start:gsub('%p', '%%%1') .. '| ' ..
-    '([-_%w]+): ([^\n]*)\n'
+  local pattern = comment_start:gsub('%p', '%%%1') .. '|%s*' ..
+    '([-_%w]+):%s?([^\n]*)\n'
   for key, value in code:gmatch(pattern) do
     if key == 'fig-cap' then
       props['caption'] = value
@@ -529,12 +547,12 @@ local function diagram_options (cb, comment_start)
       elseif prefix == 'opt' then
         user_opt[key] = value
       else
-        -- TODO: Check if the option is enabled.
-        local args_key, args_val = attr_name:match '^args-(.*)=(.*)'
+        -- TODO: Check if we allow reading user arguments
+        -- TODO: Consider writing a single pattern after agreeing
+        -- on how the keys should be extracted.
+        local args_key = attr_name:match '^args(-.*)'
         if args_key then
-          print("arg found " .. args_key .. "=" .. args_val)
-          -- TODO: Consider making the value `nil` if it is empty!
-          user_args[args_key] = args_val
+          user_args[args_key] = value
         else
           -- Use as image attribute
           image_attr[attr_name] = value
@@ -543,7 +561,18 @@ local function diagram_options (cb, comment_start)
     end
   end
 
-  dbg()
+  -- TODO: Discuss if it would confuse the user that
+  -- flags and classes cannot be "interleaved" as attributes
+  -- and classes are parsed independently from one another by pandoc.
+  for _, cls in ipairs(cb.classes) do
+    local arg = cls:match('^args(.*)$')
+    if arg then
+      user_args[arg] = {}
+    end
+  end
+
+
+  -- dbg()
 
   return {
     ['alt'] = alt or
@@ -601,13 +630,6 @@ local function code_to_figure (conf)
     local dgr_opt = diagram_options(block, engine.line_comment_start)
     for optname, value in pairs(engine.opt or {}) do
       dgr_opt.opt[optname] = dgr_opt.opt[optname] or value
-    end
-
-    for argname, value in pairs(engine.args or {}) do
-      -- HERE: consider combining user defaults and checking if
-      -- it is even allowed.
-      print("argname " .. argname)
-      dgr_opt.args[argname] = dgr_opt.args[argname] or value
     end
 
     local run_pdf2svg = engine.mime_type == 'application/pdf'
