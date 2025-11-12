@@ -1,0 +1,15 @@
+filters: ["exec.lua"]
+metadata:
+  exec:
+    commands:
+      d2:
+        command: d2
+        args: "{ARGS} {KWARGS} -f {INPUT_FILE}"
+        comment: "--"
+        generates_file: True # means that the data from STDOUT should be read!
+        output: markdown # "image/text/code/markdown" or `pandoc` type?
+        mime_type: null # required for "image" output
+        cache: false
+        header: null # to always prefix the input text with something
+        footer:  null # to always suffix the input text with something
+
